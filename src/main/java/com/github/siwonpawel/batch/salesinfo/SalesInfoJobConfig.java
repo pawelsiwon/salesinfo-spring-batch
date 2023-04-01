@@ -1,6 +1,7 @@
 package com.github.siwonpawel.batch.salesinfo;
 
 import com.github.siwonpawel.batch.salesinfo.dto.SalesInfoDTO;
+import com.github.siwonpawel.batch.salesinfo.processor.SalesInfoProcessor;
 import com.github.siwonpawel.domain.SalesInfo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.Job;
@@ -9,7 +10,8 @@ import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
-import org.springframework.batch.item.ItemProcessor;
+import org.springframework.batch.integration.async.AsyncItemProcessor;
+import org.springframework.batch.integration.async.AsyncItemWriter;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.builder.JpaItemWriterBuilder;
@@ -22,6 +24,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.persistence.EntityManagerFactory;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadPoolExecutor;
 
 @Configuration
 @RequiredArgsConstructor
@@ -41,14 +45,14 @@ public class SalesInfoJobConfig {
     }
 
     @Bean
-    Step fromFileIntoDatabase(ItemReader<SalesInfoDTO> salesInfoReader, ItemProcessor<SalesInfoDTO, SalesInfo> salesInfoProcessor, ItemWriter<SalesInfo> salesInfoDatabaseWriter, TaskExecutor importJobTaskExecutor) {
+    Step fromFileIntoDatabase(ItemReader<SalesInfoDTO> salesInfoReader, AsyncItemProcessor<SalesInfoDTO, SalesInfo> asyncItemProcessor, AsyncItemWriter<SalesInfo> asyncItemWriter, TaskExecutor importJobTaskExecutor) {
         return new StepBuilder("fromFileIntoDatabase")
                 .repository(jobRepository)
                 .transactionManager(transactionManager)
-                .<SalesInfoDTO, SalesInfo>chunk(100)
+                .<SalesInfoDTO, Future<SalesInfo>>chunk(100)
                 .reader(salesInfoReader)
-                .processor(salesInfoProcessor)
-                .writer(salesInfoDatabaseWriter)
+                .processor(asyncItemProcessor)
+                .writer(asyncItemWriter)
                 .taskExecutor(importJobTaskExecutor)
                 .build();
     }
@@ -89,8 +93,26 @@ public class SalesInfoJobConfig {
         threadPoolTaskExecutor.setCorePoolSize(5);
         threadPoolTaskExecutor.setMaxPoolSize(5);
         threadPoolTaskExecutor.setQueueCapacity(10);
+        threadPoolTaskExecutor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         threadPoolTaskExecutor.setThreadNamePrefix("Thread N-> :");
 
         return threadPoolTaskExecutor;
+    }
+
+    @Bean
+    AsyncItemProcessor<SalesInfoDTO, SalesInfo> asyncItemProcessor(SalesInfoProcessor salesInfoProcessor, TaskExecutor importJobTaskExecutor) {
+        var asyncItemProcessor = new AsyncItemProcessor<SalesInfoDTO, SalesInfo>();
+        asyncItemProcessor.setDelegate(salesInfoProcessor);
+        asyncItemProcessor.setTaskExecutor(importJobTaskExecutor);
+
+        return asyncItemProcessor;
+    }
+
+    @Bean
+    AsyncItemWriter<SalesInfo> asyncItemWriter(ItemWriter<SalesInfo> salesInfoItemWriter) {
+        var asyncItemWriter = new AsyncItemWriter<SalesInfo>();
+        asyncItemWriter.setDelegate(salesInfoItemWriter);
+
+        return asyncItemWriter;
     }
 }
