@@ -1,0 +1,8 @@
+spring:
+  profiles:
+    active: local
+
+  batch:
+    jdbc:
+      platform: postgresql
+      initialize-schema: always
