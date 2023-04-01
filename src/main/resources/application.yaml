@@ -11,3 +11,9 @@ spring:
     jdbc:
       platform: postgresql
       initialize-schema: always
+    job:
+      enabled: false
+
+sales:
+  info:
+    directory: /Users/pawelsiwon/Documents/git/salesinfo/src/main/resources/data

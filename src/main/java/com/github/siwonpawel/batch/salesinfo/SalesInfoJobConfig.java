@@ -6,6 +6,8 @@ import com.github.siwonpawel.domain.SalesInfo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
+import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
@@ -15,10 +17,12 @@ import org.springframework.batch.integration.async.AsyncItemWriter;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.builder.JpaItemWriterBuilder;
+import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -28,6 +32,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 
 @Configuration
+@EnableBatchProcessing
 @RequiredArgsConstructor
 public class SalesInfoJobConfig {
 
@@ -58,7 +63,8 @@ public class SalesInfoJobConfig {
     }
 
     @Bean
-    ItemReader<SalesInfoDTO> salesInfoReader() {
+    @StepScope
+    FlatFileItemReader<SalesInfoDTO> salesInfoReader(@Value("#{jobParameters['input.file.name']}") String resource) {
         String[] names = new String[]{
                 "product",
                 "seller",
@@ -69,7 +75,7 @@ public class SalesInfoJobConfig {
         };
 
         return new FlatFileItemReaderBuilder<SalesInfoDTO>()
-                .resource(new ClassPathResource("data/Pascoal-Store.csv"))
+                .resource(new FileSystemResource(resource))
                 .name("salesInfoReader")
                 .delimited()
                 .delimiter(",")
@@ -94,7 +100,7 @@ public class SalesInfoJobConfig {
         threadPoolTaskExecutor.setMaxPoolSize(5);
         threadPoolTaskExecutor.setQueueCapacity(10);
         threadPoolTaskExecutor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-        threadPoolTaskExecutor.setThreadNamePrefix("Thread N-> :");
+        threadPoolTaskExecutor.setThreadNamePrefix("Thread JOB -> :");
 
         return threadPoolTaskExecutor;
     }
