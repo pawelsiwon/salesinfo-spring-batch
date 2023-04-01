@@ -1,7 +1,12 @@
 spring:
-  profiles:
-    active: local
-
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/sales_info
+    username: root
+    password: root
+  jpa:
+    hibernate:
+      ddl-auto: create
   batch:
     jdbc:
       platform: postgresql
