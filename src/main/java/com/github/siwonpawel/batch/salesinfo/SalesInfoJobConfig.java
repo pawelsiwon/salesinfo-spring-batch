@@ -17,6 +17,8 @@ import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.persistence.EntityManagerFactory;
@@ -39,7 +41,7 @@ public class SalesInfoJobConfig {
     }
 
     @Bean
-    Step fromFileIntoDatabase(ItemReader<SalesInfoDTO> salesInfoReader, ItemProcessor<SalesInfoDTO, SalesInfo> salesInfoProcessor, ItemWriter<SalesInfo> salesInfoDatabaseWriter) {
+    Step fromFileIntoDatabase(ItemReader<SalesInfoDTO> salesInfoReader, ItemProcessor<SalesInfoDTO, SalesInfo> salesInfoProcessor, ItemWriter<SalesInfo> salesInfoDatabaseWriter, TaskExecutor importJobTaskExecutor) {
         return new StepBuilder("fromFileIntoDatabase")
                 .repository(jobRepository)
                 .transactionManager(transactionManager)
@@ -47,6 +49,7 @@ public class SalesInfoJobConfig {
                 .reader(salesInfoReader)
                 .processor(salesInfoProcessor)
                 .writer(salesInfoDatabaseWriter)
+                .taskExecutor(importJobTaskExecutor)
                 .build();
     }
 
@@ -79,4 +82,15 @@ public class SalesInfoJobConfig {
                 .build();
     }
 
+    @Bean
+    TaskExecutor importJobTaskExecutor() {
+        ThreadPoolTaskExecutor threadPoolTaskExecutor = new ThreadPoolTaskExecutor();
+
+        threadPoolTaskExecutor.setCorePoolSize(5);
+        threadPoolTaskExecutor.setMaxPoolSize(5);
+        threadPoolTaskExecutor.setQueueCapacity(10);
+        threadPoolTaskExecutor.setThreadNamePrefix("Thread N-> :");
+
+        return threadPoolTaskExecutor;
+    }
 }
