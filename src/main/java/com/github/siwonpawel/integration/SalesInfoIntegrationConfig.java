@@ -4,6 +4,7 @@ import org.springframework.batch.core.Job;
 import org.springframework.batch.core.launch.support.SimpleJobLauncher;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.integration.launch.JobLaunchingGateway;
+import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,12 +32,12 @@ public class SalesInfoIntegrationConfig {
     private String salesDirectory;
 
     @Bean
-    public IntegrationFlow integrationFlow(JobRepository jobRepository, TaskExecutor integrationFlowTaskExecutor, Job importSalesInfo) {
+    public IntegrationFlow integrationFlow(JobRepository jobRepository, TaskExecutor integrationFlowTaskExecutor, Job importSalesInfo, BeanFactory beanFactory) {
         return IntegrationFlows
                 .from(fileReadingMessageSource(),
                         sourcePolling -> sourcePolling.poller(Pollers.fixedDelay(Duration.ofSeconds(5)).maxMessagesPerPoll(1)))
                 .channel(fileIn())
-                .handle(fileRenameProcessingHandler(processingFilenameGenerator()))
+                .handle(fileRenameProcessingHandler(processingFilenameGenerator(beanFactory)))
                 .transform(fileMessageToJobRequest(importSalesInfo))
                 .handle(jobLaunchingGateway(jobRepository, integrationFlowTaskExecutor))
                 .log()
@@ -80,8 +81,10 @@ public class SalesInfoIntegrationConfig {
         return fileWritingMessage;
     }
 
-    FileNameGenerator processingFilenameGenerator() {
+    FileNameGenerator processingFilenameGenerator(BeanFactory beanFactory) {
         var filenameGenerator = new DefaultFileNameGenerator();
+
+        filenameGenerator.setBeanFactory(beanFactory);
         filenameGenerator.setExpression("payload.name + '.processing'");
 
         return filenameGenerator;
