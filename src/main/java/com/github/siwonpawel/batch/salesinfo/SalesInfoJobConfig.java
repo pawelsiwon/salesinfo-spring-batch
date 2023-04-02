@@ -2,6 +2,7 @@ package com.github.siwonpawel.batch.salesinfo;
 
 import com.github.siwonpawel.batch.salesinfo.dto.SalesInfoDTO;
 import com.github.siwonpawel.batch.salesinfo.faulttolerance.CustomSkipPolicy;
+import com.github.siwonpawel.batch.salesinfo.listeners.CustomJobExecutionListener;
 import com.github.siwonpawel.batch.salesinfo.listeners.CustomStepExecutionListener;
 import com.github.siwonpawel.batch.salesinfo.processor.SalesInfoProcessor;
 import com.github.siwonpawel.domain.SalesInfo;
@@ -43,11 +44,12 @@ public class SalesInfoJobConfig {
     private final PlatformTransactionManager transactionManager;
 
     @Bean
-    Job importSalesInfo(Step fromFileIntoDatabase) {
+    Job importSalesInfo(Step fromFileIntoDatabase, CustomJobExecutionListener customJobExecutionListener) {
         return new JobBuilder("importSalesInfo")
                 .repository(jobRepository)
                 .incrementer(new RunIdIncrementer())
                 .start(fromFileIntoDatabase)
+                .listener(customJobExecutionListener)
                 .build();
     }
 
