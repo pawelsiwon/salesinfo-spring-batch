@@ -1,6 +1,7 @@
 package com.github.siwonpawel.batch.salesinfo;
 
 import com.github.siwonpawel.batch.salesinfo.dto.SalesInfoDTO;
+import com.github.siwonpawel.batch.salesinfo.faulttolerance.CustomSkipPolicy;
 import com.github.siwonpawel.batch.salesinfo.processor.SalesInfoProcessor;
 import com.github.siwonpawel.domain.SalesInfo;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +19,6 @@ import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.builder.JpaItemWriterBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
-import org.springframework.batch.item.file.FlatFileParseException;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -51,7 +51,7 @@ public class SalesInfoJobConfig {
     }
 
     @Bean
-    Step fromFileIntoDatabase(ItemReader<SalesInfoDTO> salesInfoReader, AsyncItemProcessor<SalesInfoDTO, SalesInfo> asyncItemProcessor, AsyncItemWriter<SalesInfo> asyncItemWriter, TaskExecutor importJobTaskExecutor) {
+    Step fromFileIntoDatabase(ItemReader<SalesInfoDTO> salesInfoReader, AsyncItemProcessor<SalesInfoDTO, SalesInfo> asyncItemProcessor, AsyncItemWriter<SalesInfo> asyncItemWriter, TaskExecutor importJobTaskExecutor, CustomSkipPolicy customSkipPolicy) {
         return new StepBuilder("fromFileIntoDatabase")
                 .repository(jobRepository)
                 .transactionManager(transactionManager)
@@ -60,9 +60,7 @@ public class SalesInfoJobConfig {
                 .processor(asyncItemProcessor)
                 .writer(asyncItemWriter)
                 .faultTolerant()
-                .skipLimit(10)
-                .skip(FlatFileParseException.class)
-                .skip(IllegalArgumentException.class)
+                .skipPolicy(customSkipPolicy)
                 .taskExecutor(importJobTaskExecutor)
                 .build();
     }
