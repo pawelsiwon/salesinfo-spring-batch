@@ -17,7 +17,6 @@ public class SalesInfoProcessor implements ItemProcessor<SalesInfoDTO, SalesInfo
 
     @Override
     public SalesInfo process(SalesInfoDTO item) {
-        log.info("processing the item {}", item);
         return salesInfoMapper.mapToEntity(item);
     }
 }
