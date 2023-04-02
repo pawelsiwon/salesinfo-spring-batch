@@ -18,6 +18,7 @@ import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.builder.JpaItemWriterBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
+import org.springframework.batch.item.file.FlatFileParseException;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -58,6 +59,10 @@ public class SalesInfoJobConfig {
                 .reader(salesInfoReader)
                 .processor(asyncItemProcessor)
                 .writer(asyncItemWriter)
+                .faultTolerant()
+                .skipLimit(10)
+                .skip(FlatFileParseException.class)
+                .skip(IllegalArgumentException.class)
                 .taskExecutor(importJobTaskExecutor)
                 .build();
     }
