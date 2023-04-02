@@ -2,6 +2,7 @@ package com.github.siwonpawel.batch.salesinfo;
 
 import com.github.siwonpawel.batch.salesinfo.dto.SalesInfoDTO;
 import com.github.siwonpawel.batch.salesinfo.faulttolerance.CustomSkipPolicy;
+import com.github.siwonpawel.batch.salesinfo.listeners.CustomStepExecutionListener;
 import com.github.siwonpawel.batch.salesinfo.processor.SalesInfoProcessor;
 import com.github.siwonpawel.domain.SalesInfo;
 import lombok.RequiredArgsConstructor;
@@ -51,7 +52,14 @@ public class SalesInfoJobConfig {
     }
 
     @Bean
-    Step fromFileIntoDatabase(ItemReader<SalesInfoDTO> salesInfoReader, AsyncItemProcessor<SalesInfoDTO, SalesInfo> asyncItemProcessor, AsyncItemWriter<SalesInfo> asyncItemWriter, TaskExecutor importJobTaskExecutor, CustomSkipPolicy customSkipPolicy) {
+    Step fromFileIntoDatabase(
+            ItemReader<SalesInfoDTO> salesInfoReader,
+            AsyncItemProcessor<SalesInfoDTO, SalesInfo> asyncItemProcessor,
+            AsyncItemWriter<SalesInfo> asyncItemWriter,
+            TaskExecutor importJobTaskExecutor,
+            CustomSkipPolicy customSkipPolicy,
+            CustomStepExecutionListener customStepExecutionListener
+    ) {
         return new StepBuilder("fromFileIntoDatabase")
                 .repository(jobRepository)
                 .transactionManager(transactionManager)
@@ -61,6 +69,7 @@ public class SalesInfoJobConfig {
                 .writer(asyncItemWriter)
                 .faultTolerant()
                 .skipPolicy(customSkipPolicy)
+                .listener(customStepExecutionListener)
                 .taskExecutor(importJobTaskExecutor)
                 .build();
     }
