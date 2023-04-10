@@ -5,6 +5,7 @@ import com.github.siwonpawel.batch.salesinfo.faulttolerance.CustomSkipPolicy;
 import com.github.siwonpawel.batch.salesinfo.listeners.CustomJobExecutionListener;
 import com.github.siwonpawel.batch.salesinfo.listeners.CustomStepExecutionListener;
 import com.github.siwonpawel.batch.salesinfo.processor.SalesInfoProcessor;
+import com.github.siwonpawel.batch.salesinfo.step.FileCollector;
 import com.github.siwonpawel.domain.SalesInfo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.Job;
@@ -40,13 +41,15 @@ public class SalesInfoJobConfig {
 
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
+    private final FileCollector fileCollector;
 
     @Bean
-    Job importSalesInfo(Step fromFileIntoKafka, CustomJobExecutionListener customJobExecutionListener) {
+    Job importSalesInfo(Step fromFileIntoKafka, Step fileCollectorTasklet, CustomJobExecutionListener customJobExecutionListener) {
         return new JobBuilder("importSalesInfo")
                 .repository(jobRepository)
                 .incrementer(new RunIdIncrementer())
                 .start(fromFileIntoKafka)
+                .next(fileCollectorTasklet)
                 .listener(customJobExecutionListener)
                 .build();
     }
@@ -128,5 +131,14 @@ public class SalesInfoJobConfig {
     @Bean
     public TaskExecutor importJobTaskExecutor() {
         return new SyncTaskExecutor();
+    }
+
+    @Bean
+    Step fileCollectorTasklet() {
+        return new StepBuilder("fileCollector")
+                .repository(jobRepository)
+                .transactionManager(transactionManager)
+                .tasklet(fileCollector)
+                .build();
     }
 }
