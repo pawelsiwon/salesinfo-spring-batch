@@ -54,7 +54,7 @@ services:
       resources:
         limits:
           cpus: '1'
-          memory: 600M
+          memory: 1G
 
 
   schema-registry:
@@ -98,5 +98,6 @@ services:
       resources:
         limits:
           cpus: '1'
-          memory: 200M
+          memory: 1G
+    restart: always
 

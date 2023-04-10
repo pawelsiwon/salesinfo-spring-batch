@@ -1,4 +1,4 @@
-package com.github.siwonpawel.integration;
+package com.github.siwonpawel.batch.salesinfo.integration;
 
 import lombok.Setter;
 import org.springframework.batch.core.Job;

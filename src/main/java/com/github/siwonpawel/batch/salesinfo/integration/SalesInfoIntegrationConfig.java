@@ -1,4 +1,4 @@
-package com.github.siwonpawel.integration;
+package com.github.siwonpawel.batch.salesinfo.integration;
 
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.launch.support.SimpleJobLauncher;
@@ -8,6 +8,7 @@ import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.dsl.IntegrationFlow;
@@ -19,11 +20,9 @@ import org.springframework.integration.file.FileReadingMessageSource;
 import org.springframework.integration.file.FileWritingMessageHandler;
 import org.springframework.integration.file.filters.SimplePatternFileListFilter;
 import org.springframework.integration.file.support.FileExistsMode;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.io.File;
 import java.time.Duration;
-import java.util.concurrent.ThreadPoolExecutor;
 
 @Configuration
 public class SalesInfoIntegrationConfig {
@@ -32,30 +31,17 @@ public class SalesInfoIntegrationConfig {
     private String salesDirectory;
 
     @Bean
-    public IntegrationFlow integrationFlow(JobRepository jobRepository, TaskExecutor integrationFlowTaskExecutor, Job importSalesInfo, BeanFactory beanFactory) {
+    public IntegrationFlow integrationFlow(JobRepository jobRepository, Job importSalesInfo, BeanFactory beanFactory) {
         return IntegrationFlows
                 .from(fileReadingMessageSource(),
                         sourcePolling -> sourcePolling.poller(Pollers.fixedDelay(Duration.ofSeconds(5)).maxMessagesPerPoll(1)))
                 .channel(fileIn())
                 .handle(fileRenameProcessingHandler(processingFilenameGenerator(beanFactory)))
                 .transform(fileMessageToJobRequest(importSalesInfo))
-                .handle(jobLaunchingGateway(jobRepository, integrationFlowTaskExecutor))
+                .handle(jobLaunchingGateway(jobRepository, new SyncTaskExecutor()))
                 .log()
                 .get();
 
-    }
-
-    @Bean
-    TaskExecutor integrationFlowTaskExecutor() {
-        ThreadPoolTaskExecutor threadPoolTaskExecutor = new ThreadPoolTaskExecutor();
-
-        threadPoolTaskExecutor.setCorePoolSize(5);
-        threadPoolTaskExecutor.setMaxPoolSize(5);
-        threadPoolTaskExecutor.setQueueCapacity(10);
-        threadPoolTaskExecutor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-        threadPoolTaskExecutor.setThreadNamePrefix("Thread IF -> :");
-
-        return threadPoolTaskExecutor;
     }
 
     FileReadingMessageSource fileReadingMessageSource() {

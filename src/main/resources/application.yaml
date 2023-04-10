@@ -13,6 +13,17 @@ spring:
       initialize-schema: always
     job:
       enabled: false
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring:
+          json:
+            trusted:
+              packages: '*'
+    template:
+      default-topic: sales.info
 
 sales:
   info:

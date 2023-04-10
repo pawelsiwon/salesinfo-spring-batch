@@ -17,22 +17,21 @@ import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.integration.async.AsyncItemProcessor;
 import org.springframework.batch.integration.async.AsyncItemWriter;
-import org.springframework.batch.item.ItemReader;
-import org.springframework.batch.item.ItemWriter;
-import org.springframework.batch.item.database.builder.JpaItemWriterBuilder;
-import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.batch.item.kafka.KafkaItemWriter;
+import org.springframework.batch.item.kafka.builder.KafkaItemWriterBuilder;
+import org.springframework.batch.item.support.SynchronizedItemStreamReader;
+import org.springframework.batch.item.support.builder.SynchronizedItemStreamReaderBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 
-import javax.persistence.EntityManagerFactory;
 import java.util.concurrent.Future;
-import java.util.concurrent.ThreadPoolExecutor;
 
 @Configuration
 @EnableBatchProcessing
@@ -40,29 +39,28 @@ import java.util.concurrent.ThreadPoolExecutor;
 public class SalesInfoJobConfig {
 
     private final JobRepository jobRepository;
-    private final EntityManagerFactory entityMangerFactory;
     private final PlatformTransactionManager transactionManager;
 
     @Bean
-    Job importSalesInfo(Step fromFileIntoDatabase, CustomJobExecutionListener customJobExecutionListener) {
+    Job importSalesInfo(Step fromFileIntoKafka, CustomJobExecutionListener customJobExecutionListener) {
         return new JobBuilder("importSalesInfo")
                 .repository(jobRepository)
                 .incrementer(new RunIdIncrementer())
-                .start(fromFileIntoDatabase)
+                .start(fromFileIntoKafka)
                 .listener(customJobExecutionListener)
                 .build();
     }
 
     @Bean
-    Step fromFileIntoDatabase(
-            ItemReader<SalesInfoDTO> salesInfoReader,
+    Step fromFileIntoKafka(
+            SynchronizedItemStreamReader<SalesInfoDTO> salesInfoReader,
             AsyncItemProcessor<SalesInfoDTO, SalesInfo> asyncItemProcessor,
             AsyncItemWriter<SalesInfo> asyncItemWriter,
-            TaskExecutor importJobTaskExecutor,
             CustomSkipPolicy customSkipPolicy,
-            CustomStepExecutionListener customStepExecutionListener
+            CustomStepExecutionListener customStepExecutionListener,
+            TaskExecutor importJobTaskExecutor
     ) {
-        return new StepBuilder("fromFileIntoDatabase")
+        return new StepBuilder("fromFileIntoKafka")
                 .repository(jobRepository)
                 .transactionManager(transactionManager)
                 .<SalesInfoDTO, Future<SalesInfo>>chunk(100)
@@ -78,7 +76,7 @@ public class SalesInfoJobConfig {
 
     @Bean
     @StepScope
-    FlatFileItemReader<SalesInfoDTO> salesInfoReader(@Value("#{jobParameters['input.file.name']}") String resource) {
+    SynchronizedItemStreamReader<SalesInfoDTO> salesInfoReader(@Value("#{jobParameters['input.file.name']}") String resource) {
         String[] names = new String[]{
                 "product",
                 "seller",
@@ -88,7 +86,7 @@ public class SalesInfoJobConfig {
                 "category"
         };
 
-        return new FlatFileItemReaderBuilder<SalesInfoDTO>()
+        var salesInfoReader = new FlatFileItemReaderBuilder<SalesInfoDTO>()
                 .resource(new FileSystemResource(resource))
                 .name("salesInfoReader")
                 .delimited()
@@ -97,26 +95,24 @@ public class SalesInfoJobConfig {
                 .linesToSkip(1)
                 .targetType(SalesInfoDTO.class)
                 .build();
-    }
 
-    @Bean
-    ItemWriter<SalesInfo> salesInfoDatabaseWriter() {
-        return new JpaItemWriterBuilder<SalesInfo>()
-                .entityManagerFactory(entityMangerFactory)
+        return new SynchronizedItemStreamReaderBuilder<SalesInfoDTO>()
+                .delegate(salesInfoReader)
                 .build();
     }
 
     @Bean
-    TaskExecutor importJobTaskExecutor() {
-        ThreadPoolTaskExecutor threadPoolTaskExecutor = new ThreadPoolTaskExecutor();
+    AsyncItemWriter<SalesInfo> salesInfoDatabaseWriter(KafkaTemplate<String, SalesInfo> kafkaTemplate) {
+        KafkaItemWriter<String, SalesInfo> itemWriter = new KafkaItemWriterBuilder<String, SalesInfo>()
+                .itemKeyMapper(item -> String.valueOf(item.getSellerId()))
+                .kafkaTemplate(kafkaTemplate)
+                .delete(false)
+                .build();
 
-        threadPoolTaskExecutor.setCorePoolSize(5);
-        threadPoolTaskExecutor.setMaxPoolSize(5);
-        threadPoolTaskExecutor.setQueueCapacity(10);
-        threadPoolTaskExecutor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-        threadPoolTaskExecutor.setThreadNamePrefix("Thread JOB -> :");
+        var asyncItemWriter = new AsyncItemWriter<SalesInfo>();
+        asyncItemWriter.setDelegate(itemWriter);
 
-        return threadPoolTaskExecutor;
+        return asyncItemWriter;
     }
 
     @Bean
@@ -125,14 +121,12 @@ public class SalesInfoJobConfig {
         asyncItemProcessor.setDelegate(salesInfoProcessor);
         asyncItemProcessor.setTaskExecutor(importJobTaskExecutor);
 
+
         return asyncItemProcessor;
     }
 
     @Bean
-    AsyncItemWriter<SalesInfo> asyncItemWriter(ItemWriter<SalesInfo> salesInfoItemWriter) {
-        var asyncItemWriter = new AsyncItemWriter<SalesInfo>();
-        asyncItemWriter.setDelegate(salesInfoItemWriter);
-
-        return asyncItemWriter;
+    public TaskExecutor importJobTaskExecutor() {
+        return new SyncTaskExecutor();
     }
 }
