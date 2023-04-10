@@ -6,6 +6,7 @@ import com.github.siwonpawel.batch.salesinfo.listeners.CustomJobExecutionListene
 import com.github.siwonpawel.batch.salesinfo.listeners.CustomStepExecutionListener;
 import com.github.siwonpawel.batch.salesinfo.processor.SalesInfoProcessor;
 import com.github.siwonpawel.batch.salesinfo.step.FileCollector;
+import com.github.siwonpawel.batch.salesinfo.step.SendEmail;
 import com.github.siwonpawel.domain.SalesInfo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.Job;
@@ -42,14 +43,17 @@ public class SalesInfoJobConfig {
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
     private final FileCollector fileCollector;
+    private final SendEmail sendEmail;
 
     @Bean
-    Job importSalesInfo(Step fromFileIntoKafka, Step fileCollectorTasklet, CustomJobExecutionListener customJobExecutionListener) {
+    Job importSalesInfo(Step fromFileIntoKafka, Step fileCollectorTasklet, Step sendEmailTasklet, CustomJobExecutionListener customJobExecutionListener) {
         return new JobBuilder("importSalesInfo")
                 .repository(jobRepository)
                 .incrementer(new RunIdIncrementer())
-                .start(fromFileIntoKafka)
-                .next(fileCollectorTasklet)
+                .start(fromFileIntoKafka).on("FAILED").end()
+                .from(fromFileIntoKafka).on("COMPLETED").to(fileCollectorTasklet)
+                .from(fromFileIntoKafka).on("COMPLETED WITH SKIPS").to(sendEmailTasklet)
+                .end()
                 .listener(customJobExecutionListener)
                 .build();
     }
@@ -139,6 +143,15 @@ public class SalesInfoJobConfig {
                 .repository(jobRepository)
                 .transactionManager(transactionManager)
                 .tasklet(fileCollector)
+                .build();
+    }
+
+    @Bean
+    Step sendEmailTasklet() {
+        return new StepBuilder("sendEmail")
+                .repository(jobRepository)
+                .transactionManager(transactionManager)
+                .tasklet(sendEmail)
                 .build();
     }
 }

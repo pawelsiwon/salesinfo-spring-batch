@@ -24,8 +24,12 @@ public class CustomStepExecutionListener implements StepExecutionListener {
 
     @Override
     public ExitStatus afterStep(StepExecution stepExecution) {
-        if (stepExecution.getExitStatus() == ExitStatus.COMPLETED) {
+        if (stepExecution.getExitStatus().getExitCode() == ExitStatus.COMPLETED.getExitCode()) {
             log.info("the step finished with status {}", stepExecution.getExitStatus());
+
+            if (stepExecution.getReadSkipCount() > 0) {
+                return new ExitStatus("COMPLETED WITH SKIPS");
+            }
         } else {
             log.info("something bad have happened after the step execution");
         }
